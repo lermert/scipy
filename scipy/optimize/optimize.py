@@ -1098,7 +1098,8 @@ def _minimize_bfgs(fun, x0, args=(), jac=None, callback=None,
 
 
 def fmin_cg(f, x0, fprime=None, args=(), gtol=1e-5, norm=Inf, epsilon=_epsilon,
-            maxiter=None, full_output=0, disp=1, retall=0, callback=None):
+            maxiter=None, full_output=0, disp=1, retall=0, callback=None,
+            parallel_rank=0, itargs=None):
     """
     Minimize a function using a nonlinear conjugate gradient algorithm.
 
@@ -1252,7 +1253,9 @@ def fmin_cg(f, x0, fprime=None, args=(), gtol=1e-5, norm=Inf, epsilon=_epsilon,
             'eps': epsilon,
             'disp': disp,
             'maxiter': maxiter,
-            'return_all': retall}
+            'return_all': retall,
+            'parallel_rank': parallel_rank,
+            'itargs': itargs}  # laura
 
     res = _minimize_cg(f, x0, args, fprime, callback=callback, **opts)
 
@@ -1270,7 +1273,7 @@ def fmin_cg(f, x0, fprime=None, args=(), gtol=1e-5, norm=Inf, epsilon=_epsilon,
 
 def _minimize_cg(fun, x0, args=(), jac=None, callback=None,
                  gtol=1e-5, norm=Inf, eps=_epsilon, maxiter=None,
-                 disp=False, return_all=False,
+                 disp=False, return_all=False, parallel_rank=0, itargs=None,
                  **unknown_options):
     """
     Minimization of scalar function of one or more variables using the
@@ -1291,6 +1294,8 @@ def _minimize_cg(fun, x0, args=(), jac=None, callback=None,
         If `jac` is approximated, use this value for the step size.
 
     """
+    print('Rank {} starts optimizer.'.format(parallel_rank))
+    # laura modified 11Jul19
     _check_unknown_options(unknown_options)
     f = fun
     fprime = jac
@@ -1372,7 +1377,7 @@ def _minimize_cg(fun, x0, args=(), jac=None, callback=None,
         if retall:
             allvecs.append(xk)
         if callback is not None:
-            callback(xk)
+            callback(xk, parallel_rank, itargs)  # laura
         k += 1
 
     fval = old_fval
@@ -1384,20 +1389,23 @@ def _minimize_cg(fun, x0, args=(), jac=None, callback=None,
     else:
         msg = _status_message['success']
 
-    if disp:
-        print("%s%s" % ("Warning: " if warnflag != 0 else "", msg))
-        print("         Current function value: %f" % fval)
-        print("         Iterations: %d" % k)
-        print("         Function evaluations: %d" % func_calls[0])
-        print("         Gradient evaluations: %d" % grad_calls[0])
+    if parallel_rank == 0:
+        if disp:
+            print("%s%s" % ("Warning: " if warnflag != 0 else "", msg))
+            print("         Current function value: %f" % fval)
+            print("         Iterations: %d" % k)
+            print("         Function evaluations: %d" % func_calls[0])
+            print("         Gradient evaluations: %d" % grad_calls[0])
 
-    result = OptimizeResult(fun=fval, jac=gfk, nfev=func_calls[0],
-                            njev=grad_calls[0], status=warnflag,
-                            success=(warnflag == 0), message=msg, x=xk,
-                            nit=k)
-    if retall:
-        result['allvecs'] = allvecs
-    return result
+        result = OptimizeResult(fun=fval, jac=gfk, nfev=func_calls[0],
+                                njev=grad_calls[0], status=warnflag,
+                                success=(warnflag == 0), message=msg, x=xk,
+                                nit=k)
+        if retall:
+            result['allvecs'] = allvecs
+        return result
+    else:
+        return()
 
 
 def fmin_ncg(f, x0, fprime, fhess_p=None, fhess=None, args=(), avextol=1e-5,

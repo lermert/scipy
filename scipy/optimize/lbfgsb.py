@@ -211,7 +211,8 @@ def fmin_l_bfgs_b(func, x0, fprime=None, args=(),
 def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
                      disp=None, maxcor=10, ftol=2.2204460492503131e-09,
                      gtol=1e-5, eps=1e-8, maxfun=15000, maxiter=15000,
-                     iprint=-1, callback=None, maxls=20, **unknown_options):
+                     iprint=-1, callback=None, maxls=20,
+                     parallel_rank=0, itargs=None, **unknown_options):
     """
     Minimize a scalar function of one or more variables using the L-BFGS-B
     algorithm.
@@ -252,6 +253,8 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
     arrive at `ftol`.
 
     """
+    print('Rank {} starts optimizer.'.format(parallel_rank))
+    # laura modified 15Jul19
     _check_unknown_options(unknown_options)
     m = maxcor
     epsilon = eps
@@ -337,7 +340,7 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
             # new iteration
             n_iterations += 1
             if callback is not None:
-                callback(np.copy(x))
+                callback(np.copy(x), parallel_rank, itargs)  # laura
 
             if n_iterations >= maxiter:
                 task[:] = 'STOP: TOTAL NO. of ITERATIONS REACHED LIMIT'
@@ -367,10 +370,12 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
     n_corrs = min(n_bfgs_updates, maxcor)
     hess_inv = LbfgsInvHessProduct(s[:n_corrs], y[:n_corrs])
 
-    return OptimizeResult(fun=f, jac=g, nfev=n_function_evals[0],
+    if parallel_rank == 0:
+        return OptimizeResult(fun=f, jac=g, nfev=n_function_evals[0],
                           nit=n_iterations, status=warnflag, message=task_str,
                           x=x, success=(warnflag == 0), hess_inv=hess_inv)
-
+    else:
+        return()
 
 class LbfgsInvHessProduct(LinearOperator):
     """Linear operator for the L-BFGS approximate inverse Hessian.
